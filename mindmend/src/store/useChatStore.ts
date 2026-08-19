@@ -56,9 +56,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const assistantMsg: ChatMessage = {
       id: makeId(),
       role: 'assistant',
-      content: "I'm MindMend, here to help. This is a demo reply so you can see how the conversation view looks.",
+      content: "Thinking...",
       createdAt: Date.now() + 1,
     }
+
+    let targetChatId = activeChatId
 
     if (activeChatId) {
       set({
@@ -68,16 +70,56 @@ export const useChatStore = create<ChatState>((set, get) => ({
             : c,
         ),
       })
-      return { success: true }
+    } else {
+      const newChat: ChatSummary = {
+        id: makeId(),
+        title: trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed,
+        updatedAt: Date.now(),
+        messages: [userMsg, assistantMsg],
+      }
+      targetChatId = newChat.id
+      set({ chats: [newChat, ...chats], activeChatId: newChat.id })
     }
 
-    const newChat: ChatSummary = {
-      id: makeId(),
-      title: trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed,
-      updatedAt: Date.now(),
-      messages: [userMsg, assistantMsg],
-    }
-    set({ chats: [newChat, ...chats], activeChatId: newChat.id })
+    // Async fetch request to the backend
+    fetch("http://localhost:8000/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: trimmed })
+    })
+      .then(res => {
+        if (!res.ok) throw new Error("Network response was not ok")
+        return res.json()
+      })
+      .then(data => {
+        set((state) => ({
+          chats: state.chats.map((c) =>
+            c.id === targetChatId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === assistantMsg.id ? { ...m, content: data.answer || JSON.stringify(data) } : m
+                  ),
+                }
+              : c
+          ),
+        }))
+      })
+      .catch(err => {
+        set((state) => ({
+          chats: state.chats.map((c) =>
+            c.id === targetChatId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === assistantMsg.id ? { ...m, content: "❌ Error connecting to backend API." } : m
+                  ),
+                }
+              : c
+          ),
+        }))
+      })
+
     return { success: true }
   },
 }))
