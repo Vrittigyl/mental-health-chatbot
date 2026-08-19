@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from retrievers.book_retriever import HybridRetriever, clean_output_text
 from retrievers.reddit_retriever import load_training_data, find_similar
 from summarizers.gemma_summarizer import GemmaSummarizer
-from pipeline import analyze_query
+from pipeline_test import analyze_query
 
 # Global objects for models
 book_retriever = None

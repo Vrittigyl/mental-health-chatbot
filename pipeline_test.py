@@ -24,7 +24,7 @@ if cause_path not in sys.path:
 
 
 
-from metrics.intent import extract_intent
+from metrics.intent import detect_intent
 
 from metrics.severity import detect_severity
 
@@ -136,7 +136,7 @@ def analyze_query(query: str):
 
     # 3. Intent
 
-    action, obj = extract_intent(query)
+    action, obj = detect_intent(query)
 
     if action and obj:
 

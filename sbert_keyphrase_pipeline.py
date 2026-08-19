@@ -55,7 +55,7 @@ except Exception as e:
 
 print("Loading Intent Extractor...")
 try:
-    from metrics.intent import extract_intent
+    from metrics.intent import detect_intent
 except Exception as e:
     print(f"Warning: Intent extractor not loaded: {e}")
     extract_intent = None
@@ -140,7 +140,7 @@ class SBERTRetrieverPipeline:
         # 3. Intent
         if extract_intent:
             try:
-                act, obj = extract_intent(query)
+                act, obj = detect_intent(query)
                 results["intent"] = {"action": act or "", "object": obj or ""}
             except Exception as e:
                 print(f"Intent extraction error: {e}")
