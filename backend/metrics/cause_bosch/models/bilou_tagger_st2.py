@@ -31,7 +31,7 @@ class NER_CRF_Classifier(nn.Module):
             labels (list[str]): List of labels that is used to calculate the CRF dimensions.
         """
         super().__init__()
-        self._bert_model: AutoModel = AutoModel.from_pretrained(bert_model_name)
+        self._bert_model: AutoModel = AutoModel.from_pretrained(bert_model_name, add_pooling_layer=False)
         self._dropout: nn.Dropout = nn.Dropout(p=0.2)
         self._linear: nn.Linear = nn.Linear(
             in_features=self._bert_model.config.hidden_size, out_features=len(labels)

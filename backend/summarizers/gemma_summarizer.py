@@ -44,9 +44,12 @@ class GemmaSummarizer:
 
         # Instruct prompt format
         prompt = (
-            "You are a helpful medical AI assistant. "
+            "You are an expert mental health and medical AI assistant. "
             "Use ONLY the following provided context from medical textbooks and Reddit discussions "
-            "to answer the user's question accurately.\n\n"
+            "to answer the user's question. Do NOT add any information that is not present in the context. "
+            "Do NOT hallucinate or fabricate facts. If the context does not contain enough information "
+            "to fully answer the question, clearly state what is unknown rather than guessing. "
+            "Your response MUST be between 200 and 300 tokens — detailed yet concise.\n\n"
             f"Context:\n{context_text}\n\n"
             f"Question: {query}\n\n"
             "Answer:"
@@ -59,7 +62,10 @@ class GemmaSummarizer:
             data = json.dumps({
                 "model": self.model_name,
                 "prompt": prompt,
-                "stream": True  # Stream the response token-by-token!
+                "stream": True,
+                "options": {
+                    "num_predict": 400  # upper bound in tokens to allow ~200-300 token answers
+                }
             }).encode('utf-8')
 
             req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
@@ -76,5 +82,44 @@ class GemmaSummarizer:
             yield f"❌ Error connecting to Ollama: {e.reason}"
         except TimeoutError:
             yield "\n\n⚠️ Ollama took too long to respond (timeout). It might be downloading the model or struggling to process the context."
+        except Exception as e:
+            yield f"❌ Error during generation: {e}"
+
+    def generate_chitchat(self, query: str) -> str:
+        if not self.model_name:
+            yield "❌ Ollama is not running."
+            return
+
+        prompt = (
+            "You are a friendly, empathetic mental health AI assistant. "
+            "The user is just having a casual conversation or saying hello. "
+            "Respond warmly, politely, and concisely.\n\n"
+            f"User: {query}\n\n"
+            "Assistant:"
+        )
+
+        print("\n  [Summarizer] Generating quick response (chitchat)...")
+
+        try:
+            url = "http://localhost:11434/api/generate"
+            data = json.dumps({
+                "model": self.model_name,
+                "prompt": prompt,
+                "stream": True
+            }).encode('utf-8')
+
+            req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+            
+            with urllib.request.urlopen(req, timeout=60) as response:
+                for line in response:
+                    if line:
+                        chunk = json.loads(line.decode('utf-8'))
+                        if "response" in chunk:
+                            yield chunk["response"]
+
+        except urllib.error.URLError as e:
+            yield f"❌ Error connecting to Ollama: {e.reason}"
+        except TimeoutError:
+            yield "\n\n⚠️ Ollama took too long to respond."
         except Exception as e:
             yield f"❌ Error during generation: {e}"

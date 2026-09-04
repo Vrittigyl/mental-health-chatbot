@@ -68,9 +68,9 @@ try:
 
     )
 
-except ImportError as e:
+except (ImportError, FileNotFoundError) as e:
 
-    print(f"Warning: Could not import CauseEffectExtractor: {e}")
+    print(f"Warning: Could not import or load CauseEffectExtractor: {e}")
 
     cause_extractor = None
 

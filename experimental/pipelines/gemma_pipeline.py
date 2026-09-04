@@ -1,27 +1,33 @@
 """
-End-to-End RAG Pipeline with Long-T5 Summarizer
-===============================================
+End-to-End RAG Pipeline with Gemma Summarizer
+=============================================
 
 Full pipeline:
   1. User types a question
   2. HybridRetriever searches 5 medical textbooks
   3. Bert/retrieve searches the Reddit Q&A dataset
   4. Both contexts are combined
-  5. Long-T5 synthesizes a final, unified answer
+  5. Gemma synthesizes a final, unified answer
 """
 
+import os
+import sys
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-from retrievers.book_retriever import HybridRetriever, clean_output_text
-from retrievers.reddit_retriever import load_training_data, find_similar
-from summarizers.bigbird_summarizer import BigBirdSummarizer
+# Add project root to sys.path for cross-folder imports
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, _project_root)
+
+from backend.retrievers.book_retriever import HybridRetriever, clean_output_text
+from backend.retrievers.reddit_retriever import load_training_data, find_similar
+from backend.summarizers.gemma_summarizer import GemmaSummarizer
 
 
 def main():
     print("\n" + "=" * 70)
-    print("  🧠 Mental Health Chatbot — RAG (Books + Reddit) + Long-T5")
+    print("  🧠 Mental Health Chatbot — RAG (Books + Reddit) + Gemma")
     print("=" * 70)
 
     # ── Step 1: Load Knowledge Retriever (Textbooks) ──
@@ -45,9 +51,9 @@ def main():
         print(f"❌ Error loading Reddit data: {e}")
         reddit_data = []
 
-    # ── Step 3: Load Summarizer (BigBird) ──
+    # ── Step 3: Load Summarizer (Gemma) ──
     try:
-        summarizer = BigBirdSummarizer()
+        summarizer = GemmaSummarizer()
     except Exception as e:
         print(f"❌ Could not load summarizer: {e}")
         summarizer = None
@@ -78,7 +84,7 @@ def main():
 
         # ── A. Retrieve from Textbooks ──
         print("\n  🔍 Searching Textbooks...")
-        book_results = book_retriever.retrieve_top_k(user_input, k=3, similarity_pool=10)
+        book_results = book_retriever.retrieve_top_k(user_input, k=5, similarity_pool=10)
         
         if book_results:
             combined_contexts.append("=== MEDICAL TEXTBOOK EXCERPTS ===")
@@ -94,7 +100,7 @@ def main():
             print("  🔍 Searching Reddit Discussions...")
             # Reuse the sentence transformer model from the book retriever to encode the query
             query_emb = book_retriever.model.encode(user_input)
-            reddit_results = find_similar(query_emb, reddit_data, top_k=3)
+            reddit_results = find_similar(query_emb, reddit_data, top_k=5)
             
             if reddit_results:
                 combined_contexts.append("=== REDDIT DISCUSSIONS ===")
@@ -123,13 +129,17 @@ def main():
 
         # ── E. Generate abstractive summary ──
         if summarizer:
-            summary = summarizer.summarize(full_context_string, query=user_input)
-
             print("\n" + "=" * 70)
             print("  🤖 Answer:")
             print("=" * 70)
-            print(f"\n  {summary}")
-            print("\n" + "=" * 70)
+            print("\n  ", end="")
+            
+            # Print chunks as they stream in
+            for chunk in summarizer.summarize(full_context_string, query=user_input):
+                import sys
+                print(chunk, end="", flush=True)
+                
+            print("\n\n" + "=" * 70)
         else:
             print("\n  ⚠️ Summarizer not loaded. Showing raw data only:")
             print(full_context_string)

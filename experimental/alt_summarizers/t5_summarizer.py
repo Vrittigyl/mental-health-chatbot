@@ -78,11 +78,12 @@ class LongT5Summarizer:
                 summary_ids = self.model.generate(
                     inputs["input_ids"],
                     attention_mask=inputs["attention_mask"],
-                    max_length=200,       # Max output tokens
-                    min_length=30,        # Minimum output length
-                    num_beams=1,          # Greedy search for fast CPU inference
-                    length_penalty=1.0,
-                    no_repeat_ngram_size=3,
+                    max_length=300,           # Max output tokens
+                    min_length=50,            # Minimum output length
+                    num_beams=4,              # Beam search for better quality
+                    length_penalty=1.5,       # Encourage longer, complete outputs
+                    no_repeat_ngram_size=4,   # Prevent 4-gram repetitions
+                    repetition_penalty=2.5,   # Heavily penalize repeated tokens
                     early_stopping=True,
                 )
 

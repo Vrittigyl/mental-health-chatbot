@@ -1,12 +1,46 @@
 # 🧠 MindMend: Mental Health AI Chatbot
 
-Welcome to the **MindMend** backend! This project is an advanced, privacy-first Mental Health AI Chatbot. It runs entirely locally on your machine, leveraging state-of-the-art NLP models for dialog analysis, a dual-RAG (Retrieval-Augmented Generation) system reading from both clinical textbooks and Reddit discussions, and the Gemma LLM via Ollama to generate highly empathetic, context-aware advice.
+Welcome to the **MindMend** project! This is an advanced, privacy-first Mental Health AI Chatbot. It runs entirely locally on your machine, leveraging state-of-the-art NLP models for dialog analysis, a dual-RAG (Retrieval-Augmented Generation) system reading from both clinical textbooks and Reddit discussions, and the Gemma LLM via Ollama to generate highly empathetic, context-aware advice.
+
+---
+
+## 📂 Project Structure
+
+```
+mental-health-chatbot/
+├── frontend/           ← React + Vite frontend UI
+├── backend/            ← Core RAG pipeline & API server
+└── experimental/       ← Experimental scripts & alternative pipelines
+```
+
+### `frontend/`
+The React/TypeScript web UI built with Vite. Connects to the backend API to provide a chat interface.
+
+### `backend/`
+The core application logic — everything needed to run the chatbot:
+- **`api.py`** — FastAPI server (entry point for frontend)
+- **`final_pipeline.py`** — CLI-based interactive pipeline (terminal entry point)
+- **`pipeline.py`** — NLP query analysis orchestrator (emotion, severity, intent, cause)
+- **`config/`** — Centralized settings and hyperparameters
+- **`data/`** — Textbook paragraphs, Reddit Q&A, embeddings
+- **`metrics/`** — NLP classification models (emotion, severity, intent, cause)
+- **`retrievers/`** — RAG search engines (textbooks, Reddit, knowledge graph)
+- **`summarizers/`** — Gemma LLM summarizer (via Ollama)
+- **`requirements.txt`** — Python dependencies
+
+### `experimental/`
+Scripts and alternative pipeline variants used for experimentation, **not part of the main architecture**:
+- **`pipelines/`** — Alternative pipelines (BART, BigBird, Pegasus-X, Gemma, Book-only, Reddit-only)
+- **`summarizers/`** — Alternative summarizer implementations (BART, BigBird, Pegasus-X, T5)
+- **`dataset_preparation/`** — One-time data preparation scripts
+- **`preprocessing/`** — Reddit data preprocessing scripts
+- **`bert_embedding.py`** — SBERT Q&A embedding experiment
+- **`keyword_extraction_test.py`** — KeyBERT/RAKE keyword extraction test
+- **`sbert_keyphrase_pipeline.py`** — SBERT keyphrase similarity pipeline
 
 ---
 
 ## 🏗️ System Architecture
-
-Before diving in, here is a high-level overview of how the data flows when a user asks a question:
 
 ```mermaid
 graph TD
@@ -37,93 +71,83 @@ graph TD
 ```
 
 ### How It Works:
-1. **User Query**: The user types a message in the terminal.
-2. **Dialog Analysis (`pipeline.py`)**: The system analyzes the text to find the user's primary emotion, the severity of the crisis, their intent (e.g., "seeking advice"), and extracts root causes and effects.
-3. **Retrieval (`retrievers/`)**: 
-   - **Textbooks**: It searches through chunks of 5 major psychology textbooks using semantic embeddings.
-   - **Reddit**: It searches through 20,000+ real-world Reddit discussions (from r/ADHD, r/OCD, etc.) to find peer experiences.
-4. **LLM Generation (`summarizers/gemma_summarizer.py`)**: All of this structured data is bundled into a massive prompt and sent to a local LLM, which streams back a compassionate, clinically-informed, and peer-supported response.
+1. **User Query**: The user types a message (via terminal or web UI).
+2. **Dialog Analysis (`backend/pipeline.py`)**: Analyzes the text for emotion, severity, intent, and root causes/effects.
+3. **Retrieval (`backend/retrievers/`)**: 
+   - **Textbooks**: Searches chunks of 5 major psychology textbooks using semantic embeddings.
+   - **Reddit**: Searches 20,000+ real-world Reddit discussions from mental health subreddits.
+4. **LLM Generation (`backend/summarizers/gemma_summarizer.py`)**: All structured data is bundled into a prompt and sent to a local LLM, which streams back a compassionate, clinically-informed response.
 
 ---
 
 ## 🚀 Step-by-Step Setup Guide
-## 🚀 Step-by-Step Setup Guide
-
-Follow these steps exactly to get the project running. 
 
 ### Step 1: Install Prerequisites
 1. **Python 3.10+**
-2. **Ollama**: Download and install [Ollama](https://ollama.com/) on your computer. Keep the application running in the background.
+2. **Node.js 18+** (for the frontend)
+3. **Ollama**: Download and install [Ollama](https://ollama.com/). Keep it running in the background.
 
 ### Step 2: Set Up Python Environment
-Open your terminal and run:
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+cd backend
+python3 -m venv ../venv
+source ../venv/bin/activate  # On Windows: ..\venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Step 3: Download the Required Data (Crucial!)
-Because the raw data files are too large for GitHub, you must download and place them in the correct folders before running the app.
-1. **Textbooks**: Place your clinical psychology PDF books inside the `data/books/` folder.
-2. **Reddit Data**: Place the Reddit CSV files (e.g., `train_adhd.csv`, `train_ocd.csv`) inside the `data/reddit/` folder.
+### Step 3: Download the Required Data
+Because the raw data files are too large for GitHub, you must download and place them in the correct folders:
+1. **Textbooks**: Place clinical psychology PDF books inside `backend/data/books/`
+2. **Reddit Data**: Place Reddit CSV files inside `backend/data/reddit/`
 
 ### Step 4: Download the Local LLM (Ollama)
-We use Google's `gemma3:4b` to generate responses. Ensure Ollama is running, then type:
 ```bash
 ollama pull gemma3:4b
 ```
 *(⚠️ Download Size: ~3.3GB)*
 
 ### Step 5: Build the Knowledge Graphs
-You must generate the dense vector embeddings locally so the bot can search the textbooks. Run these two commands **once**:
+Generate dense vector embeddings locally (run once):
 ```bash
-python3 -m retrievers.knowledge_graph.ingest             # Parses books into paragraphs
-python3 -m retrievers.knowledge_graph.ingest_embeddings  # Generates searchable embeddings
+cd backend
+python3 -m retrievers.knowledge_graph.ingest
+python3 -m retrievers.knowledge_graph.ingest_embeddings
 ```
 
 ---
 
 ## 💻 Running the Chatbot
 
-To start the chatbot, run:
+### Terminal Mode (CLI)
 ```bash
+cd backend
 python3 final_pipeline.py
 ```
 
+### API Server Mode (for Frontend)
+```bash
+cd backend
+uvicorn api:app --reload
+```
+
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
 ### What happens on the FIRST run?
-The very first time you run this command, **Hugging Face will automatically download 4 massive AI models** into your computer's cache (`~/.cache/huggingface`). 
+Hugging Face will automatically download 4 AI models (~5GB total):
 - **Emotion Model** (`roberta-base`)
 - **Severity Model** (`deberta-v3-large`)
 - **Intent Model** (`bart-large-mnli`)
 - **Cause Extractor** (`unicausal-tok`)
 
-*(⚠️ Total Download Size: ~5GB. This will take several minutes and you must be connected to the internet. Subsequent runs will load instantly!)*
-1. **Loading Phase**: The script will initialize 4 heavy NLP models (Emotion, Cause, Intent, Severity). If this is your first time running it, Hugging Face will automatically download the model weights (this takes a few minutes but caches them permanently).
-2. **Retrieval Phase**: It will load the FAISS indices and Reddit CSV data into your RAM.
-3. **Interactive Mode**: A `You:` prompt will appear. You can type any mental health concern.
-4. **Streaming**: The response will stream out word-by-word just like ChatGPT!
+*(Subsequent runs will load instantly from cache!)*
 
-Type `quit` at any time to exit the program.
+Type `quit` at any time to exit the terminal chatbot.
 
 ---
-
-## 📂 Project Structure Breakdown
-
-For developers looking to modify the code, here is where everything lives:
-
-- **`final_pipeline.py`**: The master entry point. Ties the whole system together and runs the terminal UI.
-- **`pipeline.py`**: The orchestrator for the NLP models. Given a string of text, it runs it through all 4 detectors and returns a structured dictionary.
-- **`metrics/`** *(formerly detectors)*: Houses the standalone NLP classification models:
-  - `emotion.py` (roberta-base)
-  - `severity.py` (deberta-v3-large)
-  - `intent.py` (bart-large-mnli)
-  - `cause_bosch/` (custom token classification)
-- **`retrievers/`**: Houses the RAG search engines:
-  - `book_retriever.py` (Queries the generated textbook embeddings)
-  - `reddit_retriever.py` & `faiss_reddit_retriever.py` (Queries the Reddit Q&A datasets)
-- **`summarizers/`**:
-  - `gemma_summarizer.py`: Handles the HTTP connection to Ollama and streams the response tokens to the terminal.
-- **`api.py`**: A FastAPI wrapper (if you want to hook this backend up to a React/Next.js frontend instead of using the terminal).
 
 Happy building! 🧠💙

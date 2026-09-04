@@ -12,6 +12,7 @@ from retrievers.book_retriever import HybridRetriever, clean_output_text
 from retrievers.reddit_retriever import load_training_data, find_similar
 from summarizers.gemma_summarizer import GemmaSummarizer
 from pipeline import analyze_query
+from metrics.router import route_query
 
 # Global objects for models
 book_retriever = None
@@ -74,6 +75,38 @@ async def chat_endpoint(request: ChatRequest):
     print("\n" + "=" * 70)
     print(f"  📨 NEW REQUEST: \"{user_input}\"")
     print("=" * 70)
+
+    # ── 0. Route Query ──
+    print("\n🚦 STEP 0: Routing User Query...")
+    route_category = route_query(user_input)
+    print(f"  Route Category: {route_category}")
+
+    if route_category == "crisis":
+        from metrics.router import CRISIS_RESPONSE
+        print("\n🚨 CRISIS DETECTED — Bypassing pipeline.")
+        return {
+            "analysis": {},
+            "answer": CRISIS_RESPONSE,
+            "route": "crisis"
+        }
+    elif route_category == "unrelated":
+        return {
+            "analysis": {},
+            "answer": "I am a mental health assistant and I can only answer questions related to mental health."
+        }
+    elif route_category == "greeting":
+        print("\n👋 Greeting detected! Skipping retrieval and calling chitchat.")
+        final_answer = ""
+        if summarizer:
+            for chunk in summarizer.generate_chitchat(user_input):
+                final_answer += chunk
+        else:
+            final_answer = "Hello there! How can I help you today?"
+            
+        return {
+            "analysis": {},
+            "answer": final_answer.strip()
+        }
 
     # ── 1. Analyze Query ──
     print("\n📊 STEP 1: Analyzing User Query...")

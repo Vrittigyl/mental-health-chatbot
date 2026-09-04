@@ -11,11 +11,11 @@ Flow:
     4. Summarizer outputs final synthesized response
 
 Usage:
-    python -m knowledge.pipeline
+    python -m retrievers.knowledge_graph.pipeline
 """
 
 import sys
-from knowledge.retrieve import HybridRetriever
+from retrievers.book_retriever import HybridRetriever
 
 def main():
     print("\nInitializing Mental Health Book Retrieval Pipeline...")
@@ -26,8 +26,8 @@ def main():
     except FileNotFoundError as e:
         print(f"Error: {e}")
         print("Please make sure you have run the ingest scripts:")
-        print("  python -m knowledge.ingest")
-        print("  python -m knowledge.ingest_embeddings")
+        print("  python -m retrievers.knowledge_graph.ingest")
+        print("  python -m retrievers.knowledge_graph.ingest_embeddings")
         return
 
     print("=" * 60)
