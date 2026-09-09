@@ -62,8 +62,15 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+from typing import List, Optional
+
+class MessageItem(BaseModel):
+    role: str
+    content: str
+
 class ChatRequest(BaseModel):
     query: str
+    history: Optional[List[MessageItem]] = []
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
@@ -71,8 +78,23 @@ async def chat_endpoint(request: ChatRequest):
     if not user_input:
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
+    history_slice = request.history[-5:] if request.history else []
+    history_text = ""
+    if history_slice:
+        formatted = [
+            f"{'User' if msg.role.lower() == 'user' else 'Assistant'}: {msg.content}"
+            for msg in history_slice
+        ]
+        history_text = "\n".join(formatted)
+
     print("\n" + "=" * 70)
     print(f"  📨 NEW REQUEST: \"{user_input}\"")
+    if history_slice:
+        print(f"  📜 THREAD HISTORY ({len(history_slice)} previous messages attached):")
+        for h in history_slice:
+            print(f"     - [{h.role.upper()}]: {h.content[:80]}{'...' if len(h.content) > 80 else ''}")
+    else:
+        print("  📜 THREAD HISTORY: None (New Thread / Initial Message)")
     print("=" * 70)
 
     # ── 1. Analyze Query ──
@@ -170,7 +192,7 @@ async def chat_endpoint(request: ChatRequest):
     final_answer = ""
     if summarizer:
         try:
-            for chunk in summarizer.summarize(full_context_string, query=enhanced_query):
+            for chunk in summarizer.summarize(full_context_string, query=enhanced_query, history_text=history_text):
                 final_answer += chunk
         except Exception as e:
             final_answer += f"\n[Error generating full response: {e}]"

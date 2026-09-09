@@ -47,6 +47,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const trimmed = parsed.data
 
     const { activeChatId, chats } = get()
+
+    // Gather up to 5 previous messages ONLY if in the same thread
+    let historyPayload: { role: string; content: string }[] = []
+    if (activeChatId) {
+      const activeChat = chats.find((c) => c.id === activeChatId)
+      if (activeChat) {
+        historyPayload = activeChat.messages
+          .filter((m) => m.content !== 'Thinking...')
+          .slice(-5)
+          .map((m) => ({ role: m.role, content: m.content }))
+      }
+    }
+
     const userMsg: ChatMessage = {
       id: makeId(),
       role: 'user',
@@ -81,11 +94,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ chats: [newChat, ...chats], activeChatId: newChat.id })
     }
 
-    // Async fetch request to the backend
+    // Async fetch request to the backend with history
     fetch("http://localhost:8000/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: trimmed })
+      body: JSON.stringify({ query: trimmed, history: historyPayload })
     })
       .then(res => {
         if (!res.ok) throw new Error("Network response was not ok")

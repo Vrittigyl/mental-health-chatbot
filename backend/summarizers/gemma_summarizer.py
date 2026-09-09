@@ -38,9 +38,10 @@ class GemmaSummarizer:
             print(f"{'='*60}\n")
             self.model_name = None
 
-    def summarize(self, context_text: str, query: str = "") -> str:
+    def summarize(self, context_text: str, query: str = "", history_text: str = "") -> str:
         if not self.model_name:
-            return "❌ Ollama is not running."
+            yield "❌ Ollama is not running."
+            return
 
         # Instruct prompt format
         prompt = (
@@ -48,6 +49,11 @@ class GemmaSummarizer:
             "Use ONLY the following provided context from medical textbooks and Reddit discussions "
             "to answer the user's question accurately.\n\n"
             f"Context:\n{context_text}\n\n"
+        )
+        if history_text and history_text.strip():
+            prompt += f"Previous Conversation History (same thread):\n{history_text.strip()}\n\n"
+
+        prompt += (
             f"Question: {query}\n\n"
             "Answer:"
         )
