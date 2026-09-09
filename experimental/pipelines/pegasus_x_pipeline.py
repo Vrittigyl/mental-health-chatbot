@@ -1,27 +1,34 @@
 """
-End-to-End RAG Pipeline with BART-Large-CNN (Chunked) Summarizer
-================================================================
+End-to-End RAG Pipeline with Pegasus-X Summarizer
+=================================================
 
 Full pipeline:
   1. User types a question
   2. HybridRetriever searches 5 medical textbooks
   3. Bert/retrieve searches the Reddit Q&A dataset
   4. Both contexts are combined
-  5. BART-Large-CNN summarizes using overlapping chunks for long inputs
+  5. Pegasus-X synthesizes a final, unified answer
 """
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-from retrievers.book_retriever import HybridRetriever, clean_output_text
-from retrievers.reddit_retriever import load_training_data, find_similar
-from summarizers.bart_summarizer import BartChunkedSummarizer
+import os
+import sys
+
+# Add project root to sys.path for cross-folder imports
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, _project_root)
+
+from backend.retrievers.book_retriever import HybridRetriever, clean_output_text
+from backend.retrievers.reddit_retriever import load_training_data, find_similar
+from experimental.alt_summarizers.pegasus_x_summarizer import PegasusXSummarizer
 
 
 def main():
     print("\n" + "=" * 70)
-    print("  🧠 Mental Health Chatbot — RAG (Books + Reddit) + BART-Large-CNN")
+    print("  🧠 Mental Health Chatbot — RAG (Books + Reddit) + Pegasus-X")
     print("=" * 70)
 
     # ── Step 1: Load Knowledge Retriever (Textbooks) ──
@@ -45,9 +52,9 @@ def main():
         print(f"❌ Error loading Reddit data: {e}")
         reddit_data = []
 
-    # ── Step 3: Load Summarizer (BART with Chunking) ──
+    # ── Step 3: Load Summarizer (Pegasus-X) ──
     try:
-        summarizer = BartChunkedSummarizer()
+        summarizer = PegasusXSummarizer()
     except Exception as e:
         print(f"❌ Could not load summarizer: {e}")
         summarizer = None
@@ -92,6 +99,7 @@ def main():
         # ── B. Retrieve from Reddit Q&A ──
         if reddit_data:
             print("  🔍 Searching Reddit Discussions...")
+            # Reuse the sentence transformer model from the book retriever to encode the query
             query_emb = book_retriever.model.encode(user_input)
             reddit_results = find_similar(query_emb, reddit_data, top_k=5)
             
@@ -100,6 +108,7 @@ def main():
                 print(f"  💬 Found {len(reddit_results)} Reddit discussions.")
                 for i, result in enumerate(reddit_results, 1):
                     q = result["question"]
+                    # Get the top answer if available
                     ans = result["answers"][0]["answer"] if result["answers"] else "No answer available."
                     combined_contexts.append(f"[Reddit Discussion - {result['disease']}]\nQuestion: {q}\nTop Answer: {ans}\n")
             else:

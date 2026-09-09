@@ -24,6 +24,8 @@ from sentence_transformers import SentenceTransformer
 warnings.filterwarnings("ignore")
 
 # Ensure local modules can be imported
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _project_root)
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import Summarizer
@@ -40,7 +42,7 @@ sbert_model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
 # Load Dialog Analysis components
 print("Loading Emotion Service...")
 try:
-    from metrics.emotion.service import EmotionService
+    from backend.metrics.emotion.service import EmotionService
     emotion_service = EmotionService()
 except Exception as e:
     print(f"Warning: EmotionService not loaded: {e}")
@@ -48,14 +50,14 @@ except Exception as e:
 
 print("Loading Severity Detector...")
 try:
-    from metrics.severity import detect_severity
+    from backend.metrics.severity import detect_severity
 except Exception as e:
     print(f"Warning: Severity detector not loaded: {e}")
     detect_severity = None
 
 print("Loading Intent Extractor...")
 try:
-    from metrics.intent import detect_intent
+    from backend.metrics.intent import detect_intent
 except Exception as e:
     print(f"Warning: Intent extractor not loaded: {e}")
     extract_intent = None
@@ -71,7 +73,7 @@ if cause_bosch_path not in sys.path:
     sys.path.append(cause_bosch_path)
 
 try:
-    from metrics.cause_bosch.extract import CauseEffectExtractor
+    from backend.metrics.cause_bosch.extract import CauseEffectExtractor
 
     cause_extractor = CauseEffectExtractor(
         model_dir=".",
