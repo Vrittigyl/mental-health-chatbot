@@ -1,15 +1,15 @@
 """
 Output Guardrails
 =================
-
 Validates and filters LLM output BEFORE it reaches the user.
 These checks catch dangerous content that the LLM might generate,
 even when given good instructions.
 
 Checks performed:
-1. Harmful content detection — blocks medication dosages, self-harm methods, diagnosis claims
-2. Disclaimer injection — appends severity-appropriate disclaimers
-3. Groundedness check — flags responses that may be hallucinated
+1. Harmful content detection (regex) — blocks medication dosages, self-harm methods, diagnosis claims
+2. Toxicity detection (Detoxify ML) — catches insults, threats, obscenity, identity attacks
+3. Groundedness check (keyword overlap) — flags responses that may be hallucinated
+4. Disclaimer injection — appends severity-appropriate disclaimers
 """
 
 import re
@@ -126,6 +126,116 @@ def check_harmful_content(response: str) -> tuple[str, list[str]]:
     return cleaned, flags
 
 
+# ─── Detoxify Toxicity Filter (ML-Based) ─────────────────────────────
+# Uses the Detoxify library (BERT-based) to score LLM output for:
+#   - toxicity, severe_toxicity, obscene, threat, insult, identity_attack
+# This catches nuanced toxic content that regex misses (e.g., "you're pathetic").
+# Lazy-loaded to avoid slowing down startup if not needed.
+
+_toxicity_model = None
+_TOXICITY_AVAILABLE = True  # Flag to avoid repeated import failures
+
+
+def _get_toxicity_model():
+    """
+    Lazily loads the Detoxify model on first use.
+    Returns None if the library is not installed (graceful fallback).
+    """
+    global _toxicity_model, _TOXICITY_AVAILABLE
+
+    if not _TOXICITY_AVAILABLE:
+        return None
+
+    if _toxicity_model is not None:
+        return _toxicity_model
+
+    try:
+        from detoxify import Detoxify
+        print("  🧪 Loading Detoxify toxicity model...")
+        _toxicity_model = Detoxify('original')
+        print("  ✅ Detoxify model loaded!")
+        return _toxicity_model
+    except ImportError:
+        print("  ⚠️ Detoxify not installed. Run: pip install detoxify")
+        print("     Falling back to regex-only output filtering.")
+        _TOXICITY_AVAILABLE = False
+        return None
+    except Exception as e:
+        print(f"  ⚠️ Failed to load Detoxify model: {e}")
+        _TOXICITY_AVAILABLE = False
+        return None
+
+
+# Toxicity categories and their thresholds
+# Lower threshold = more strict. 0.5 is a balanced default.
+TOXICITY_THRESHOLDS = {
+    "toxicity": 0.5,
+    "severe_toxicity": 0.3,   # Lower threshold — even mildly severe is bad
+    "obscene": 0.5,
+    "threat": 0.4,            # Lower threshold — threats are dangerous
+    "insult": 0.5,
+    "identity_attack": 0.4,   # Lower threshold — identity attacks are harmful
+}
+
+# Safe fallback response when toxicity is detected
+TOXIC_FALLBACK_RESPONSE = (
+    "I want to help you with this. Could you tell me more about "
+    "what you're going through? I'm here to listen and support you. 💛"
+)
+
+
+def check_toxicity(response: str) -> tuple[str, list[str]]:
+    """
+    Scores LLM output for toxicity using the Detoxify BERT model.
+
+    Checks 6 categories: toxicity, severe_toxicity, obscene,
+    threat, insult, identity_attack.
+
+    Each category has its own threshold (threats and identity attacks
+    use a stricter threshold than general toxicity).
+
+    If any category exceeds its threshold, the entire response is
+    replaced with a safe fallback message.
+
+    If Detoxify is not installed, gracefully skips (returns response as-is).
+
+    Args:
+        response: The LLM response text to check
+
+    Returns:
+        Tuple of (safe_response, list_of_toxicity_flags)
+
+    Example:
+        >>> check_toxicity("You're being pathetic about this")
+        ("I want to help you with this...", ["toxicity: 0.71", "insult: 0.82"])
+    """
+    model = _get_toxicity_model()
+    if model is None:
+        # Detoxify not available — skip gracefully
+        return response, []
+
+    try:
+        # Run the model — returns dict of {category: score}
+        scores = model.predict(response)
+
+        flags = []
+        for category, threshold in TOXICITY_THRESHOLDS.items():
+            score = scores.get(category, 0.0)
+            if score > threshold:
+                flags.append(f"{category}: {score:.2f}")
+
+        if flags:
+            print(f"  ☣️ GUARDRAIL: Toxicity detected — {flags}")
+            # Replace entire response with safe fallback
+            return TOXIC_FALLBACK_RESPONSE, flags
+
+        return response, []
+
+    except Exception as e:
+        print(f"  ⚠️ Toxicity check failed: {e}. Skipping.")
+        return response, []
+
+
 def ensure_disclaimer(response: str, severity: Optional[str] = None) -> str:
     """
     Appends an appropriate disclaimer based on severity level.
@@ -221,9 +331,16 @@ def run_output_guardrails(
     Runs all output guardrails in sequence.
 
     Order:
-    1. Harmful content check (redaction)
-    2. Groundedness check (flagging)
-    3. Disclaimer injection (appending)
+    1. Harmful content check — regex (fast, catches medical-specific harm)
+    2. Toxicity check — Detoxify ML (catches general insults, threats, obscenity)
+    3. Groundedness check — keyword overlap (flags potential hallucinations)
+    4. Disclaimer injection — severity-appropriate warnings
+
+    The regex and Detoxify checks work as complementary layers:
+    - Regex catches medical-specific harm (dosages, "stop your meds", etc.)
+      that Detoxify wouldn't flag (polite but dangerous advice).
+    - Detoxify catches general toxicity (insults, threats, etc.)
+      that regex doesn't cover (infinite phrasings).
 
     Args:
         response: Raw LLM response
@@ -236,17 +353,23 @@ def run_output_guardrails(
     if not response or not response.strip():
         return "I'm sorry, I wasn't able to generate a response. Please try rephrasing your question."
 
-    # Step 1: Check and redact harmful content
+    # Step 1: Check and redact harmful content (regex — fast first pass)
     cleaned_response, harm_flags = check_harmful_content(response)
 
     if harm_flags:
         print(f"  🛡️ GUARDRAIL: Harmful content redacted — flags: {harm_flags}")
 
-    # Step 2: Check groundedness
+    # Step 2: Toxicity check (Detoxify ML — catches what regex misses)
+    cleaned_response, toxic_flags = check_toxicity(cleaned_response)
+
+    if toxic_flags:
+        print(f"  ☣️ GUARDRAIL: Toxic content caught — flags: {toxic_flags}")
+
+    # Step 3: Check groundedness
     if context:
         cleaned_response, is_grounded = check_groundedness(cleaned_response, context)
 
-    # Step 3: Add disclaimer
+    # Step 4: Add disclaimer
     cleaned_response = ensure_disclaimer(cleaned_response, severity)
 
     return cleaned_response

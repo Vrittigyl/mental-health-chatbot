@@ -26,10 +26,12 @@ from guardrails.input_guardrails import (
     check_prompt_injection,
     check_off_topic,
     sanitize_input,
+    redact_pii,
 )
 from guardrails.output_guardrails import (
     run_output_guardrails,
     check_harmful_content,
+    check_toxicity,
     ensure_disclaimer,
     check_groundedness,
 )
@@ -47,9 +49,11 @@ __all__ = [
     "check_prompt_injection",
     "check_off_topic",
     "sanitize_input",
+    "redact_pii",
     # Output guardrails
     "run_output_guardrails",
     "check_harmful_content",
+    "check_toxicity",
     "ensure_disclaimer",
     "check_groundedness",
     # Crisis response

@@ -16,3 +16,6 @@ pandas
 # ── Utilities ──
 pydantic
 huggingface-hub
+
+# ── Guardrails (ML-based) ──
+detoxify
