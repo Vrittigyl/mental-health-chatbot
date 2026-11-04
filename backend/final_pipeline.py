@@ -7,6 +7,7 @@ from retrievers.book_retriever import HybridRetriever, clean_output_text
 from retrievers.reddit_retriever import load_training_data, find_similar
 from summarizers.gemma_summarizer import GemmaSummarizer
 from pipeline_test import analyze_query
+from guardrails import run_input_guardrails, run_output_guardrails
 
 def main():
     print("\n" + "=" * 70)
@@ -65,6 +66,19 @@ def main():
             print("\nGoodbye! 👋")
             break
 
+        # ── 0. Input Guardrails ──
+        print("\n  🛡️ Running Input Guardrails...")
+        guardrail_result = run_input_guardrails(user_input)
+        if guardrail_result.blocked:
+            print(f"\n  ⚠️ Guardrail triggered: {guardrail_result.reason}")
+            print("\n" + "=" * 70)
+            print("  🤖 Response:")
+            print("=" * 70)
+            print(f"  {guardrail_result.response}")
+            print("=" * 70)
+            continue
+        print("  ✅ Input guardrails passed.")
+
         # ── A. Analyze the User's Query ──
         # This calls your pipeline.py function to extract emotion, intent, etc.
         analysis = analyze_query(user_input)
@@ -117,19 +131,29 @@ def main():
 
         # ── E. Generate Answer with Gemma ──
         if summarizer:
+            print("\n  🤖 Generating response...")
+            
+            # Collect the full response for guardrail checking
+            raw_answer = ""
+            try:
+                for chunk in summarizer.summarize(full_context_string, query=enhanced_query):
+                    raw_answer += chunk
+            except Exception as e:
+                raw_answer += f"\n[Error: {e}]"
+
+            # ── F. Output Guardrails ──
+            print("  🛡️ Running Output Guardrails...")
+            safe_answer = run_output_guardrails(
+                response=raw_answer,
+                severity=analysis.get("severity") if analysis else None,
+                context=full_context_string,
+            )
+            print("  ✅ Output guardrails applied.")
+
             print("\n" + "=" * 70)
             print("  🤖 Answer:")
             print("=" * 70)
-            print("  ", end="", flush=True)
-            
-            # Stream the response directly to the terminal!
-            try:
-                for chunk in summarizer.summarize(full_context_string, query=enhanced_query):
-                    print(chunk, end="", flush=True)
-                print() # Newline after response finishes
-            except Exception as e:
-                print(f"\n❌ Streaming error: {e}")
-                
+            print(f"  {safe_answer}")
             print("\n" + "=" * 70)
         else:
             print("\n  ⚠️ Summarizer not loaded.")

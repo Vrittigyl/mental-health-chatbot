@@ -39,3 +39,16 @@ def detect_severity(text):
         print(f"{label_mapping[label]:<8}: {score:.4f}")
 
     return label_mapping[result["labels"][0]], result['scores'][0]
+
+while True:
+    a = input("Enter the query: ").strip()
+
+    if a.lower() == "exit":
+        print("Exiting...")
+        break
+
+    if not a:
+        print("Please enter a query.")
+        continue
+
+    print(detect_severity(a))

@@ -12,6 +12,7 @@ from retrievers.book_retriever import HybridRetriever, clean_output_text
 from retrievers.reddit_retriever import load_training_data, find_similar
 from summarizers.gemma_summarizer import GemmaSummarizer
 from pipeline_test import analyze_query
+from guardrails import run_input_guardrails, run_output_guardrails
 
 # Global objects for models
 book_retriever = None
@@ -96,6 +97,19 @@ async def chat_endpoint(request: ChatRequest):
     else:
         print("  📜 THREAD HISTORY: None (New Thread / Initial Message)")
     print("=" * 70)
+
+    # ── 0. INPUT GUARDRAILS ──
+    print("\n🛡️ STEP 0: Running Input Guardrails...")
+    guardrail_result = run_input_guardrails(user_input)
+    if guardrail_result.blocked:
+        print(f"  ❌ BLOCKED — Reason: {guardrail_result.reason}")
+        print(f"  📝 Flags: {guardrail_result.flags}")
+        return {
+            "analysis": None,
+            "answer": guardrail_result.response,
+            "guardrail_triggered": guardrail_result.reason,
+        }
+    print("  ✅ All input guardrails passed.")
 
     # ── 1. Analyze Query ──
     print("\n📊 STEP 1: Analyzing User Query...")
@@ -199,14 +213,24 @@ async def chat_endpoint(request: ChatRequest):
     else:
         final_answer = "Summarizer is not available."
 
+    # ── 6. OUTPUT GUARDRAILS ──
+    print("\n🛡️ STEP 5: Running Output Guardrails...")
+    final_answer = run_output_guardrails(
+        response=final_answer,
+        severity=analysis.get("severity"),
+        context=full_context_string,
+    )
+    print("  ✅ Output guardrails applied.")
+
     print("\n" + "=" * 70)
-    print("  ✅ FINAL ANSWER GENERATED:")
+    print("  ✅ FINAL ANSWER GENERATED (with guardrails):")
     print("=" * 70)
     print(final_answer.strip())
     print("=" * 70 + "\n")
 
     return {
         "analysis": analysis,
-        "answer": final_answer.strip()
+        "answer": final_answer.strip(),
+        "guardrail_triggered": None,
     }
 
